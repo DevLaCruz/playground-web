@@ -15,45 +15,48 @@ class Message(models.Model):
 
 class ThreadManager(models.Manager):
     def find(self, user1, user2):
-        queryset=self.filter(users=user1).filter(users=user2)
-        if len(queryset)>0:
+        queryset = self.filter(users=user1).filter(users=user2)
+        if len(queryset) > 0:
             return queryset[0]
         return None
-    
+
     def find_or_create(self, user1, user2):
-        thread=self.find(user1, user2)
+        thread = self.find(user1, user2)
         if thread is None:
-            thread=Thread.objects.create()
-            thread.users.add(user1,user2)
+            thread = Thread.objects.create()
+            thread.users.add(user1, user2)
         return thread
         
 
 class Thread(models.Model):
     users = models.ManyToManyField(User, related_name='threads')
     messages = models.ManyToManyField(Message)
-    objects=ThreadManager()
+    updated = models.DateTimeField(auto_now=True)
 
+    objects = ThreadManager()
 
-    #thread.objects.find(user1,user2)
+    class Meta:
+        ordering = ['-updated']
 
 
 def messages_changed(sender, **kwargs):
-    instance=kwargs.pop('instance', None)
-    action=kwargs.pop('action',None)
-    pk_set=kwargs.pop('pk_set',None)
-
+    instance = kwargs.pop("instance", None)
+    action = kwargs.pop("action", None)
+    pk_set = kwargs.pop("pk_set", None)
     print(instance, action, pk_set)
 
-    false_pk_set=set()
-    if action is 'pre_add':
+    false_pk_set = set()
+    if action is "pre_add":
         for msg_pk in pk_set:
-            msg=Message.objects.get(pk=msg_pk)
+            msg = Message.objects.get(pk=msg_pk)
             if msg.user not in instance.users.all():
-                print('Oops, ({}) is not part that thread'. format(msg.user))
+                print("Ups, ({}) no forma parte del hilo".format(msg.user))
                 false_pk_set.add(msg_pk)
 
+        # Forzar la actualización haciendo save
+        instance.save()
 
-    #Buscar los mensajes de false_pk_set que sí están en pk_set los borramos de pk_set
+    # Borramos de pk_set los mensajes que concuerdan con los de false_pk_set
     pk_set.difference_update(false_pk_set)
 
 m2m_changed.connect(messages_changed, sender=Thread.messages.through)
